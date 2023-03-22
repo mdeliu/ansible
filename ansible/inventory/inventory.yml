@@ -1,0 +1,12 @@
+all:
+ children:
+  webservers:
+   hosts:
+    node1:
+    node2:
+  dbservers:
+   hosts:   
+    node3:
+    node4:
+ vars:
+  ansible_user: ansible
