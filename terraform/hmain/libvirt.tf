@@ -32,7 +32,7 @@ resource "libvirt_volume" "os_image" {
   count = length(var.hostname)
   name = "os_image.${var.hostname[count.index]}.qcow2"
   pool = "default"
-  source = "debian-11-genericcloud-amd64.qcow2"
+  source = "../debian-11-genericcloud-amd64.qcow2"
   format = "qcow2"
 }
 
