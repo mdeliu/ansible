@@ -11,7 +11,6 @@ provider "libvirt" {
   uri = "qemu:///system"
 }
 
-# variables that can be overriden
 variable "hostname" {
   type    = list(string)
   default = ["ansmain"] # can be extended as needed
@@ -28,18 +27,15 @@ variable "cpu" {
 default = 1
 }
 
-
-# Fetch Debian
+# Download latest Debian cloudimage from https://cloud.debian.org/images/cloud/bullseye/latest/
 resource "libvirt_volume" "os_image" {
   count = length(var.hostname)
   name = "os_image.${var.hostname[count.index]}.qcow2"
   pool = "default"
-  source = "/home/md/terraform/debian-11-genericcloud-amd64-20230124-1270.qcow2"
+  source = "debian-11-genericcloud-amd64.qcow2"
   format = "qcow2"
 }
 
-
-# Use CloudInit to add the instance
 resource "libvirt_cloudinit_disk" "commoninit" {
   count = length(var.hostname)
   name = "${var.hostname[count.index]}-commoninit.iso"
@@ -47,7 +43,6 @@ resource "libvirt_cloudinit_disk" "commoninit" {
                           { hostname = element(var.hostname, count.index), fqdn = "${var.hostname[count.index]}.${var.domain}" })
 }
 
-# Create the machine
 resource "libvirt_domain" "debian11-cloudinit" {
   count = length(var.hostname)
   name = "${var.hostname[count.index]}"
@@ -77,7 +72,6 @@ resource "libvirt_domain" "debian11-cloudinit" {
   }
 }
 
-# Output Server IP
 output "ips" {
   value = libvirt_domain.debian11-cloudinit.*.network_interface.0.addresses
 }
