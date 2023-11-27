@@ -1,0 +1,105 @@
+---
+- name: Configure Fresh Debian Server
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    ssh_key_path: /path/to/your/ssh/key/id_rsa
+
+  tasks:
+    - name: Import SSH Key
+      authorized_key:
+        user: "{{ ansible_ssh_user }}"
+        state: present
+        key: "{{ lookup('file', ssh_key_path) }}"
+
+    - name: Change SSH Port and Permit Root Login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - { regexp: '^#?Port', line: 'Port 6666' }
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin yes' }
+
+    - name: Create fail2ban jail.local
+      template:
+        src: "{{ playbook_dir }}/jail.local.j2"
+        dest: /etc/fail2ban/jail.local
+      notify: restart fail2ban
+
+    - name: Create /var/log/auth.log
+      file:
+        path: /var/log/auth.log
+        state: touch
+
+    - name: Install UFW and allow necessary ports
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - ufw
+        - python3-ufw
+      notify: restart ufw
+
+    - name: Configure UFW
+      ufw:
+        rule: "{{ item }}"
+        state: present
+      with_items:
+        - 'deny all'
+        - 'allow 6666/tcp'
+        - 'allow 80/tcp'
+        - 'allow 443/tcp'
+
+    - name: Install Docker dependencies
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg
+        - lsb-release
+      notify: update apt cache
+
+    - name: Install Docker packages
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+      notify: start Docker service
+
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.23.0/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: 'a+x'
+
+    - name: Display Docker Compose version
+      command: docker-compose --version
+
+  handlers:
+    - name: restart fail2ban
+      service:
+        name: fail2ban
+        state: restarted
+
+    - name: restart ufw
+      service:
+        name: ufw
+        state: restarted
+
+    - name: update apt cache
+      apt:
+        update_cache: yes
+
+    - name: start Docker service
+      service:
+        name: docker
+        state: started
+ 
