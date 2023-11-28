@@ -1,12 +1,9 @@
-all:
- children:
-  webservers:
-   hosts:
-    node1:
-    node2:
-  dbservers:
-   hosts:   
-    node3:
-    node4:
- vars:
-  ansible_user: ansible
+---
+
+leafs:
+  hosts:
+    debianvps:
+      ansible_host: 192.168.100.251 # adjust as needed
+#      ansible_port: 6666           # uncomment after first run
+  vars:
+    ansible_user: user
