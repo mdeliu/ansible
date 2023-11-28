@@ -3,15 +3,18 @@
   hosts: all
   become: true
   gather_facts: true
-  vars:
-    ssh_key_path: /path/to/your/ssh/key/id_rsa
+# --- not neccessary as we import the ssh key from cloud-init
+#  vars:
+#    ssh_key_path: /path/to/your/ssh/key/id_rsa
 
   tasks:
-    - name: Import SSH Key
-      authorized_key:
-        user: "{{ ansible_ssh_user }}"
-        state: present
-        key: "{{ lookup('file', ssh_key_path) }}"
+  
+# --- not neccessary as we import the ssh key from cloud-init
+#    - name: Import SSH Key
+#      authorized_key:
+#        user: "{{ ansible_ssh_user }}"
+#        state: present
+#        key: "{{ lookup('file', ssh_key_path) }}"
 
     - name: Change SSH Port and Permit Root Login
       lineinfile:
@@ -22,6 +25,14 @@
         - { regexp: '^#?Port', line: 'Port 6666' }
         - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin yes' }
 
+    - name: Install fail2ban
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - fail2ban
+      notify: restart fail2ban
+        
     - name: Create fail2ban jail.local
       template:
         src: "{{ playbook_dir }}/jail.local.j2"
@@ -39,18 +50,31 @@
         state: present
       with_items:
         - ufw
-        - python3-ufw
       notify: restart ufw
 
     - name: Configure UFW
       ufw:
-        rule: "{{ item }}"
-        state: present
-      with_items:
-        - 'deny all'
-        - 'allow 6666/tcp'
-        - 'allow 80/tcp'
-        - 'allow 443/tcp'
+        state: enabled
+        policy: deny
+        logging: on
+
+    - name: Allow all access to tcp port 80
+      ufw:
+       rule: allow
+       port: 80
+       proto: tcp
+
+    - name: Allow all access to tcp port 443
+      ufw:
+       rule: allow
+       port: 443
+       proto: tcp
+       
+    - name: Allow all access to tcp port 6666
+      ufw:
+       rule: allow
+       port: 6666
+       proto: tcp
 
     - name: Install Docker dependencies
       apt:
@@ -64,6 +88,15 @@
         - lsb-release
       notify: update apt cache
 
+    - name: Add the GPG key for Docker
+      shell: 'curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg'
+      
+    - name: Add the repository to fetch the docker package
+      shell: 'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker.list'
+
+    - name: Update apt repo and cache on all Debian/Ubuntu boxes
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
     - name: Install Docker packages
       apt:
         name: "{{ item }}"
@@ -73,15 +106,12 @@
         - docker-ce-cli
         - containerd.io
       notify: start Docker service
-
+     
     - name: Install Docker Compose
       get_url:
         url: "https://github.com/docker/compose/releases/download/v2.23.0/docker-compose-linux-x86_64"
         dest: /usr/local/bin/docker-compose
         mode: 'a+x'
-
-    - name: Display Docker Compose version
-      command: docker-compose --version
 
   handlers:
     - name: restart fail2ban
@@ -94,12 +124,12 @@
         name: ufw
         state: restarted
 
-    - name: update apt cache
-      apt:
-        update_cache: yes
-
     - name: start Docker service
       service:
         name: docker
         state: started
  
+    - name: restart ssh
+      service:
+        name: ssh
+        state: restarted
